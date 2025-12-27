@@ -9,6 +9,8 @@ export interface ReportRow {
 }
 
 export interface AnalysisReport {
+    input_language: string;
+    analysis_language: string;
     rows: ReportRow[];
     disclaimer: string;
 }

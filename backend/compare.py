@@ -3,11 +3,25 @@ import google.generativeai as genai
 from schemas import Event, ComparisonResult
 from config import GEMINI_API_KEY, GEMINI_MODEL_NAME
 from prompts import COMPARISON_PROMPT
+from filters import comparison_cache, get_cache_key
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
 async def compare_events(event1: Event, event2: Event) -> ComparisonResult:
+    # --- OBJECTIVE 4: RATE LIMIT & DEDUPLICATION (CACHE) ---
+    cache_key = get_cache_key(event1, event2)
+    if cache_key in comparison_cache:
+        print(f"DEBUG: Cache Hit for {cache_key}")
+        cached_result = comparison_cache[cache_key]
+        # Return a copy with correct IDs
+        return ComparisonResult(
+            event_1_id=event1.event_id,
+            event_2_id=event2.event_id,
+            classification=cached_result.classification,
+            explanation=cached_result.explanation
+        )
+
     if not GEMINI_API_KEY:
         return ComparisonResult(
             event_1_id=event1.event_id,
@@ -40,22 +54,27 @@ async def compare_events(event1: Event, event2: Event) -> ComparisonResult:
             prompt,
             generation_config={"response_mime_type": "application/json"}
         )
-        print(f"DEBUG: Comparison LLM Response: {response.text}")
+        # print(f"DEBUG: Comparison LLM Response: {response.text}")
         
         result_json = json.loads(response.text)
         
-        return ComparisonResult(
+        result = ComparisonResult(
             event_1_id=event1.event_id,
             event_2_id=event2.event_id,
             classification=result_json.get("classification", "consistent"),
             explanation=result_json.get("explanation", "No explanation provided.")
         )
+        
+        # Save to cache
+        comparison_cache[cache_key] = result
+        return result
 
     except Exception as e:
         print(f"Error during LLM comparison: {e}")
+        # --- OBJECTIVE 5: SAFETY FALLBACK ---
         return ComparisonResult(
             event_1_id=event1.event_id,
             event_2_id=event2.event_id,
-            classification="consistent", # Default to safe fallback
-            explanation=f"Error during comparison: {str(e)}"
+            classification="not_analyzed",
+            explanation="Skipped to preserve system stability"
         )

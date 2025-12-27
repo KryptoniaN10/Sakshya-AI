@@ -6,3 +6,8 @@ google-generativeai
 python-dotenv
 pandas
 openai
+langdetect
+pytesseract
+pdfplumber
+opencv-python-headless
+pillow

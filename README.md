@@ -6,21 +6,19 @@ It identifies **semantic contradictions** and **material omissions** between a w
 
 ## 🚀 Features
 
-*   **Automated Confrontation**: Compares two witness statements to find discrepancies.
-*   **Strict Legal Logic**:
-    *   **Contradiction**: Active Assault vs. Passive Presence (Critical).
-    *   **Omission**: Silence on minor details (treated cautiously for FIRs).
-*   **3-Level Severity System**:
-    *   🔴 **Critical**: Identity mismatch, Presence denial, Core role change.
-    *   🟠 **Material**: Weapon inconsistency, Timeline shifts.
-    *   🟡 **Minor**: Small details, natural memory gaps.
+*   **AI-Powered Consistency Check**: Detects contradictions, omissions, and exaggerations between FIRs, Section 161 statements, and Court Depositions.
+*   **Legal Logic Safeguards**: Implements strict suppression rules (Actor Consistency, Action Compatibility) to minimize false positives.
+*   **Multilingual Support 🇮🇳**: Auto-detects and analyzes statements in **Hindi, Malayalam, Tamil, Telugu, Kannada, and Bengali** (via English pivot translation).
+*   **Document Upload & OCR 📄**: Supports **PDFs (Typed)** and **Images (Handwritten)** using Tesseract OCR.
+*   **Smart Output**: Prioritizes findings (Critical vs Minor) and groups related omissions.
 *   **Judge-Friendly UI**: Clear table layout, legal footnotes, and severity badges.
 
 ## 🛠️ Tech Stack
 
 *   **Backend**: Python, FastAPI
 *   **Frontend**: React, Vite, TailwindCSS
-*   **AI Engine**: Google Gemini API (`gemini-2.5-flash`)
+*   **AI Engine**: Google Gemini API (`gemini-2.0-flash`)
+*   **OCR**: Tesseract, pdfplumber
 
 ## 📦 Installation & Setup
 
@@ -28,6 +26,7 @@ It identifies **semantic contradictions** and **material omissions** between a w
 *   Node.js & npm
 *   Python 3.10+
 *   Google Gemini API Key
+*   **Tesseract OCR** (Required for processing Image/Handwritten documents)
 
 ### 1. Backend Setup
 
@@ -66,8 +65,8 @@ npm run dev
 ## 📝 Usage
 
 1.  Open the Frontend in your browser.
-2.  Paste the **Prior Statement** (e.g., FIR text) in the left box.
-3.  Paste the **Later Statement** (e.g., Deposition text) in the right box.
+2.  **Upload Documents** (PDF/Image) OR Paste the **Prior Statement** (e.g., FIR text) in the left box.
+3.  **Upload Documents** OR Paste the **Later Statement** (e.g., Deposition text) in the right box.
 4.  Click **"Analyze Statements"**.
 5.  Review the **Confrontation Table** for identified contradictions and their legal severity.
 

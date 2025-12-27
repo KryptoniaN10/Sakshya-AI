@@ -11,6 +11,49 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<AnalysisReport | null>(null);
 
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setText: (t: string) => void,
+    type: string
+  ) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("statement_type", type);
+
+      const response = await fetch('/upload-document', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const err = await response.json();
+          throw new Error(err.detail || "Upload failed");
+        } else {
+          const textErr = await response.text();
+          throw new Error("Server Error: " + textErr);
+        }
+      }
+
+      const data = await response.json();
+      setText(data.content_preview);
+      alert(`Extracted text from ${data.filename}. Please review and edit if necessary.`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to upload/extract text: " + (err as Error).message);
+    } finally {
+      setLoading(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
   const handleAnalyze = async () => {
     setLoading(true);
     setReport(null);
@@ -70,44 +113,68 @@ function App() {
         {!report && !loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center bg-slate-800 p-2 rounded">
                 <label className="font-semibold text-slate-300">Statement 1</label>
-                <select
-                  value={s1Type}
-                  onChange={(e) => setS1Type(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="FIR">FIR</option>
-                  <option value="Section 161">Section 161</option>
-                  <option value="Section 164">Section 164</option>
-                  <option value="Court Deposition">Court Deposition</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => handleFileUpload(e, setS1Text, s1Type)}
+                    className="hidden"
+                    id="file-upload-1"
+                  />
+                  <label htmlFor="file-upload-1" className="cursor-pointer text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-blue-300">
+                    📄 Upload PDF/Img
+                  </label>
+                  <select
+                    value={s1Type}
+                    onChange={(e) => setS1Type(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="FIR">FIR</option>
+                    <option value="Section 161">Section 161</option>
+                    <option value="Section 164">Section 164</option>
+                    <option value="Court Deposition">Court Deposition</option>
+                  </select>
+                </div>
               </div>
               <textarea
                 className="w-full h-80 bg-slate-900/50 border border-slate-700 rounded-lg p-4 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
-                placeholder="Paste the first statement text here..."
+                placeholder="Paste text here or upload a document..."
                 value={s1Text}
                 onChange={(e) => setS1Text(e.target.value)}
               />
             </div>
 
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center bg-slate-800 p-2 rounded">
                 <label className="font-semibold text-slate-300">Statement 2</label>
-                <select
-                  value={s2Type}
-                  onChange={(e) => setS2Type(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="FIR">FIR</option>
-                  <option value="Section 161">Section 161</option>
-                  <option value="Section 164">Section 164</option>
-                  <option value="Court Deposition">Court Deposition</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => handleFileUpload(e, setS2Text, s2Type)}
+                    className="hidden"
+                    id="file-upload-2"
+                  />
+                  <label htmlFor="file-upload-2" className="cursor-pointer text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-blue-300">
+                    📄 Upload PDF/Img
+                  </label>
+                  <select
+                    value={s2Type}
+                    onChange={(e) => setS2Type(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="FIR">FIR</option>
+                    <option value="Section 161">Section 161</option>
+                    <option value="Section 164">Section 164</option>
+                    <option value="Court Deposition">Court Deposition</option>
+                  </select>
+                </div>
               </div>
               <textarea
                 className="w-full h-80 bg-slate-900/50 border border-slate-700 rounded-lg p-4 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
-                placeholder="Paste the second statement text here..."
+                placeholder="Paste text here or upload a document..."
                 value={s2Text}
                 onChange={(e) => setS2Text(e.target.value)}
               />
@@ -140,7 +207,14 @@ function App() {
         {report && (
           <div className="space-y-8 animate-fade-in">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-white">Analysis Report</h2>
+              <div className="flex flex-col">
+                <h2 className="text-2xl font-bold text-white">Analysis Report</h2>
+                {report.input_language !== 'en' && (
+                  <span className="text-xs text-yellow-400 mt-1">
+                    Detected Language: {report.input_language.toUpperCase()} — Analysis performed via English translation for legal accuracy.
+                  </span>
+                )}
+              </div>
               <button onClick={() => setReport(null)} className="text-sm text-blue-400 hover:text-blue-300">Start New Analysis</button>
             </div>
 
