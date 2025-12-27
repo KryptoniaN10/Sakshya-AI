@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      '/upload-document': {
+        target: 'http://127.0.0.1:8009',
+        changeOrigin: true,
+        secure: false
+      },
     }
   }
 })

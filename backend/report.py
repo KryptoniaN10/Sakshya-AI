@@ -29,7 +29,7 @@ def group_and_prioritize_rows(rows: List[ReportRow]) -> List[ReportRow]:
     
     return final_rows
 
-def generate_final_report(rows: List[ReportRow]) -> AnalysisReport:
+def generate_final_report(rows: List[ReportRow], input_language: str = "en") -> AnalysisReport:
     """
     Aggregates the rows and adds the disclaimer.
     """
@@ -44,6 +44,7 @@ def generate_final_report(rows: List[ReportRow]) -> AnalysisReport:
     )
     
     return AnalysisReport(
+        input_language=input_language,
         rows=processed_rows,
         disclaimer=disclaimer
     )

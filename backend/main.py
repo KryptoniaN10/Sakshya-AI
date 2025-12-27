@@ -140,7 +140,7 @@ async def analyze_statements(request: AnalyzeRequest):
 
 
     # 5. Report
-    report = generate_final_report(report_rows)
+    report = generate_final_report(report_rows, detected_lang)
     
     # 6. Translation (Output -> Detected Lang)
     report.input_language = detected_lang

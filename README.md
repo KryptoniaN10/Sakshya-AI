@@ -41,6 +41,30 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Tesseract OCR (system binary) must be installed separately before using image OCR features.
+
+Windows:
+
+```powershell
+choco install tesseract
+# or download installer: https://github.com/tesseract-ocr/tesseract/releases
+```
+
+Ubuntu/Debian:
+
+```bash
+sudo apt-get update
+sudo apt-get install tesseract-ocr
+```
+
+macOS (Homebrew):
+
+```bash
+brew install tesseract
+```
+
+If Tesseract is installed in a non-standard location, set `TESSERACT_CMD` in `backend/.env` to the full path.
+
 **Configuration**:
 Create a `.env` file in the `backend/` directory:
 ```env

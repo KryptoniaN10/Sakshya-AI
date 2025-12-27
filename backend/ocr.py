@@ -10,6 +10,16 @@ import os
 # For MVP, assume Tesseract is installed in system PATH or default location.
 # Auto-detect Tesseract path if not in PATH
 def set_tesseract_path():
+    # Allow explicit override via environment variable for CI / custom installs
+    env_path = os.getenv("TESSERACT_CMD") or os.getenv("TESSERACT_PATH")
+    if env_path:
+        if os.path.exists(env_path):
+            pytesseract.pytesseract.tesseract_cmd = env_path
+            print(f"DEBUG: Using TESSERACT path from env: {env_path}")
+            return
+        else:
+            print(f"DEBUG: TESSERACT_CMD set but path not found: {env_path}")
+
     # Common locations on Windows
     possible_paths = [
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
@@ -28,6 +38,9 @@ def set_tesseract_path():
             print(f"DEBUG: Found Tesseract at {path}")
             pytesseract.pytesseract.tesseract_cmd = path
             return
+
+    # If we reach here, tesseract was not auto-detected
+    print("DEBUG: Tesseract executable not found in common locations or PATH. OCR calls will fail until Tesseract is installed or TESSERACT_CMD is set.")
 
 set_tesseract_path()
 

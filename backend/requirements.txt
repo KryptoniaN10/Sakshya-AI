@@ -11,3 +11,10 @@ pytesseract
 pdfplumber
 opencv-python-headless
 pillow
+
+# NOTE: Tesseract OCR engine is a system binary (not a Python package).
+# On Windows install from: https://github.com/tesseract-ocr/tesseract/releases
+# Example Windows installer path after install: C:\Program Files\Tesseract-OCR\tesseract.exe
+# On Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
+# On Mac (Homebrew): `brew install tesseract`
+# After installing the system Tesseract, keep `pytesseract` (above) installed via pip.
