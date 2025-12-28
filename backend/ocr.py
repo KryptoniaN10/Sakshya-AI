@@ -1,126 +1,162 @@
 import io
-import pytesseract
-import pdfplumber
-import cv2
-import numpy as np
-from PIL import Image
-
 import os
+from typing import List, Tuple
 
-# For MVP, assume Tesseract is installed in system PATH or default location.
-# Auto-detect Tesseract path if not in PATH
-def set_tesseract_path():
-    # Allow explicit override via environment variable for CI / custom installs
-    env_path = os.getenv("TESSERACT_CMD") or os.getenv("TESSERACT_PATH")
-    if env_path:
-        if os.path.exists(env_path):
-            pytesseract.pytesseract.tesseract_cmd = env_path
-            print(f"DEBUG: Using TESSERACT path from env: {env_path}")
-            return
+import requests
+from PIL import Image
+import pdfplumber
+from pdf2image import convert_from_bytes
+from langdetect import detect_langs
+
+
+def _resize_image_max(image: Image.Image, max_dim: int = 1600) -> Image.Image:
+    w, h = image.size
+    max_current = max(w, h)
+    if max_current <= max_dim:
+        return image
+    scale = max_dim / max_current
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    return image.resize((new_w, new_h), Image.LANCZOS)
+
+
+def _image_from_pdf_bytes(file_bytes: bytes, max_pages: int = 3, dpi: int = 150) -> List[Image.Image]:
+    images = convert_from_bytes(file_bytes, dpi=dpi, first_page=1, last_page=max_pages)
+    return [_resize_image_max(img) for img in images]
+
+
+def _remote_paddle_ocr(img: Image.Image, url: str, timeout: int = 30) -> Tuple[str, float, object]:
+    if not url:
+        return "", 0.0, {"error": "no_url"}
+    try:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        files = {"file": ("image.png", buf, "image/png")}
+        resp = requests.post(url, files=files, timeout=timeout)
+        resp_info = {"status_code": resp.status_code}
+        # try to parse JSON body, otherwise return text
+        try:
+            data = resp.json()
+            resp_info["body"] = data
+        except Exception:
+            resp_info["body"] = resp.text
+
+        if resp.status_code != 200:
+            print(f"Remote PaddleOCR returned status {resp.status_code}")
+            return "", 0.0, resp_info
+
+        data = resp_info.get("body") if isinstance(resp_info.get("body"), dict) else {}
+        text = (data.get("text") if isinstance(data, dict) else None) or (data.get("result") if isinstance(data, dict) else None) or (data.get("ocr_text") if isinstance(data, dict) else None) or ""
+        conf = 0.0
+        try:
+            if isinstance(data, dict):
+                conf = float(data.get("confidence") or data.get("avg_conf") or 0.0)
+        except Exception:
+            conf = 0.0
+        return text.strip(), conf, resp_info
+    except Exception as e:
+        print(f"Remote PaddleOCR error: {e}")
+        return "", 0.0, {"error": str(e)}
+
+
+def _detect_language_summary(text: str) -> Tuple[str, str]:
+    try:
+        langs = detect_langs(text)
+        if not langs:
+            return "en", "low"
+        top = langs[0]
+        code = top.lang
+        prob = top.prob
+        supported = ["en", "hi", "ml", "ta", "te", "kn", "bn"]
+        if code not in supported:
+            return "en", "low"
+        if prob > 0.85:
+            conf = "high"
+        elif prob > 0.6:
+            conf = "medium"
         else:
-            print(f"DEBUG: TESSERACT_CMD set but path not found: {env_path}")
+            conf = "low"
+        return code, conf
+    except Exception:
+        return "en", "low"
 
-    # Common locations on Windows
-    possible_paths = [
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Users\ADMIN\AppData\Local\Programs\Tesseract-OCR\tesseract.exe",
-        r"C:\Users\ADMIN\AppData\Local\Tesseract-OCR\tesseract.exe",
-        r"C:\Tesseract-OCR\tesseract.exe"
-    ]
-    
-    # Check if 'tesseract' is in PATH first
-    import shutil
-    if shutil.which("tesseract"):
-        return
-
-    for path in possible_paths:
-        if os.path.exists(path):
-            print(f"DEBUG: Found Tesseract at {path}")
-            pytesseract.pytesseract.tesseract_cmd = path
-            return
-
-    # If we reach here, tesseract was not auto-detected
-    print("DEBUG: Tesseract executable not found in common locations or PATH. OCR calls will fail until Tesseract is installed or TESSERACT_CMD is set.")
-
-set_tesseract_path()
-
-def preprocess_image(image: Image.Image) -> Image.Image:
-    """
-    Applies standard preprocessing for OCR: Grayscale, Adaptive Thresholding.
-    """
-    # Convert PIL to CV2
-    img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    
-    # 1. Grayscale
-    gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-    
-    # 2. Noise Removal (Gaussian Blur)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    
-    # 3. Adaptive Thresholding (Binarization)
-    thresh = cv2.adaptiveThreshold(
-        blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-    )
-    
-    # Convert back to PIL
-    return Image.fromarray(thresh)
 
 async def extract_text_from_file(file_bytes: bytes, filename: str) -> dict:
-    """
-    Determines file type and extracts text.
-    Returns: {"text": str, "method": "pdf_text" | "ocr", "confidence": str}
-    """
     filename = filename.lower()
-    text = ""
-    method = ""
-    confidence = "high" # default
-
+    PADDLE_OCR_URL = os.getenv("PADDLE_OCR_URL")
     try:
-        if filename.endswith(".pdf"):
-            # Stage 1: Try direct text extraction
-            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                extracted = []
-                for page in pdf.pages:
-                    extracted.append(page.extract_text() or "")
-                text = "\n".join(extracted).strip()
-            
-            if len(text) > 50: # Arbitrary threshold for "good" text
-                method = "pdf_text"
-            else:
-                method = "pdf_text_low_quality"
-                confidence = "low"
-
-        elif filename.endswith((".jpg", ".jpeg", ".png")):
-            method = "ocr"
-            image = Image.open(io.BytesIO(file_bytes))
-            
-            # Preprocess
-            processed_img = preprocess_image(image)
-            
-            # Tesseract
+        images: List[Image.Image] = []
+        if filename.endswith('.pdf'):
+            # Try typed text first
             try:
-                text = pytesseract.image_to_string(processed_img, lang='eng')
-            except pytesseract.TesseractNotFoundError:
-                return {"text": "", "method": "error", "error": "OCR Engine (Tesseract) not found on server. Please install Tesseract-OCR."}
+                with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                    extracted = []
+                    for i, page in enumerate(pdf.pages[:3]):
+                        extracted.append(page.extract_text() or "")
+                    raw_text = "\n".join(extracted).strip()
+                if len(raw_text) > 50:
+                    det_lang, det_conf = _detect_language_summary(raw_text)
+                    return {
+                        'text': raw_text,
+                        'method': 'pdf_text',
+                        'confidence': 'high',
+                        'detected_language': det_lang,
+                        'detection_confidence': det_conf,
+                        'disclaimer': 'This text is machine-extracted and may contain inaccuracies. Please verify before analysis.'
+                    }
             except Exception as e:
-                return {"text": "", "method": "error", "error": f"OCR Failed: {str(e)}"}
-            
-            # Simple confidence check
-            if len(text.strip()) < 10:
-                confidence = "low"
-            else:
-                confidence = "medium" # OCR is rarely high confidence without verification
-
+                print(f"DEBUG: pdfplumber text extraction failed: {e}")
+            try:
+                images = _image_from_pdf_bytes(file_bytes, max_pages=3, dpi=150)
+            except Exception as e:
+                print(f"DEBUG: PDF->image conversion failed: {e}")
+                images = []
+        elif filename.endswith(('.jpg', '.jpeg', '.png')):
+            img = Image.open(io.BytesIO(file_bytes))
+            images = [_resize_image_max(img)]
         else:
-            return {"text": "", "method": "unsupported", "error": "Unsupported file format"}
-            
-        return {
-            "text": text,
-            "method": method,
-            "confidence": confidence,
-            "disclaimer": "This text is machine-extracted and may contain inaccuracies. Please verify with the original document."
+            return {'text': '', 'method': 'unsupported', 'error': 'Unsupported file format'}
+
+        if not PADDLE_OCR_URL:
+            return {'text': '', 'method': 'error', 'error': 'PADDLE_OCR_URL not configured in environment'}
+
+        combined_texts = []
+        confidences = []
+        remote_responses = []
+        for img in images:
+            text, conf, resp_info = _remote_paddle_ocr(img, PADDLE_OCR_URL)
+            print(f"DEBUG: Remote PaddleOCR produced {len(text)} chars (conf={conf})")
+            remote_responses.append(resp_info)
+            if text:
+                combined_texts.append(text)
+                confidences.append(conf)
+
+        final_text = "\n\n".join([t for t in combined_texts if t])
+        avg_conf = float(sum(confidences) / len(confidences)) if confidences else 0.0
+        if avg_conf >= 0.7:
+            conf_label = 'high'
+        elif avg_conf >= 0.35:
+            conf_label = 'medium'
+        else:
+            conf_label = 'low'
+
+        det_lang, det_conf = _detect_language_summary(final_text)
+        result = {
+            'text': final_text,
+            'method': 'paddle_remote',
+            'confidence': conf_label,
+            'detected_language': det_lang,
+            'detection_confidence': det_conf,
+            'disclaimer': 'OCR text may contain inaccuracies. Please verify before analysis.'
         }
-        
+
+        # Include raw remote responses when debugging is enabled via env flag
+        debug_flag = os.getenv('PADDLE_OCR_DEBUG', '').lower() in ('1', 'true', 'yes')
+        if debug_flag:
+            result['remote_responses'] = remote_responses
+
+        return result
     except Exception as e:
-        print(f"OCR Error: {e}")
-        return {"text": "", "method": "error", "error": str(e)}
+        print(f"OCR pipeline error: {e}")
+        return {'text': '', 'method': 'error', 'error': str(e)}

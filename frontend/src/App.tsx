@@ -42,8 +42,12 @@ function App() {
       }
 
       const data = await response.json();
-      setText(data.content_preview);
-      alert(`Extracted text from ${data.filename}. Please review and edit if necessary.`);
+      console.log('upload response', data);
+      // Ensure content_preview is a string and set it safely
+      const preview = typeof data.content_preview === 'string' ? data.content_preview : String(data.content_preview || '');
+      setText(preview);
+      // Show short preview alert for immediate feedback
+      alert(`Extracted text from ${data.filename}. Preview: ${preview.slice(0,200)}\n\nPlease review and edit if necessary.`);
     } catch (err) {
       console.error(err);
       alert("Failed to upload/extract text: " + (err as Error).message);

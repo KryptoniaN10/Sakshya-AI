@@ -9,7 +9,7 @@ It identifies **semantic contradictions** and **material omissions** between a w
 *   **AI-Powered Consistency Check**: Detects contradictions, omissions, and exaggerations between FIRs, Section 161 statements, and Court Depositions.
 *   **Legal Logic Safeguards**: Implements strict suppression rules (Actor Consistency, Action Compatibility) to minimize false positives.
 *   **Multilingual Support 🇮🇳**: Auto-detects and analyzes statements in **Hindi, Malayalam, Tamil, Telugu, Kannada, and Bengali** (via English pivot translation).
-*   **Document Upload & OCR 📄**: Supports **PDFs (Typed)** and **Images (Handwritten)** using Tesseract OCR.
+*   **Document Upload & OCR 📄**: Supports **PDFs (Typed)** and **Images (Handwritten)** using a remote PaddleOCR API (configured via `PADDLE_OCR_URL`) and `pdfplumber` for typed PDFs. Local Tesseract/PaddleOCR is optional.
 *   **Smart Output**: Prioritizes findings (Critical vs Minor) and groups related omissions.
 *   **Judge-Friendly UI**: Clear table layout, legal footnotes, and severity badges.
 
@@ -18,7 +18,7 @@ It identifies **semantic contradictions** and **material omissions** between a w
 *   **Backend**: Python, FastAPI
 *   **Frontend**: React, Vite, TailwindCSS
 *   **AI Engine**: Google Gemini API (`gemini-2.0-flash`)
-*   **OCR**: Tesseract, pdfplumber
+*   **OCR**: Remote PaddleOCR (via `PADDLE_OCR_URL`), `pdfplumber` (typed PDFs). Local Tesseract/PaddleOCR optional.
 
 ## 📦 Installation & Setup
 
@@ -26,7 +26,7 @@ It identifies **semantic contradictions** and **material omissions** between a w
 *   Node.js & npm
 *   Python 3.10+
 *   Google Gemini API Key
-*   **Tesseract OCR** (Required for processing Image/Handwritten documents)
+*   **Tesseract OCR** (Optional — only required if you want to perform local image OCR instead of using the remote PaddleOCR API)
 
 ### 1. Backend Setup
 
@@ -69,6 +69,7 @@ If Tesseract is installed in a non-standard location, set `TESSERACT_CMD` in `ba
 Create a `.env` file in the `backend/` directory:
 ```env
 GEMINI_API_KEY=your_actual_api_key_here
+PADDLE_OCR_URL=https://your-remote-paddle-endpoint.example/
 ```
 
 **Run Server**:
