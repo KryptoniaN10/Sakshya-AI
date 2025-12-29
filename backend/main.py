@@ -76,14 +76,12 @@ async def analyze_statements(request: AnalyzeRequest):
     detected_lang = detect_language(origin_text1[:500] + " " + origin_text2[:500])
     print(f"DEBUG: Detected Language: {detected_lang}")
 
-    # Translation (Input -> English)
-    if detected_lang != "en":
-        print(f"DEBUG: Translating input from {detected_lang} to English...")
-        text1 = await translate_to_english(origin_text1, detected_lang)
-        text2 = await translate_to_english(origin_text2, detected_lang)
-    else:
-        text1 = origin_text1
-        text2 = origin_text2
+    # Process in the original input language.
+    # Prompts have been updated to instruct the LLM to respond in the same language
+    # as the input text, so we pass the original texts through without automatic
+    # translation.
+    text1 = origin_text1
+    text2 = origin_text2
 
     # 2. Extraction (on English text)
     print("Extracting events...")
@@ -142,27 +140,9 @@ async def analyze_statements(request: AnalyzeRequest):
     # 5. Report
     report = generate_final_report(report_rows, detected_lang)
     
-    # 6. Translation (Output -> Detected Lang)
+    # Output is produced in the input language per prompts; set metadata accordingly.
     report.input_language = detected_lang
-    report.analysis_language = "en"
-    
-    if detected_lang != "en":
-        print(f"DEBUG: Translating report back to {detected_lang}...")
-        translated_rows = []
-        for row in report.rows:
-            # Translate visible fields
-            row.classification = await translate_text(row.classification, detected_lang)
-            row.explanation = await translate_text(row.explanation, detected_lang)
-            row.legal_basis = await translate_text(row.legal_basis, detected_lang)
-            row.severity = await translate_text(row.severity, detected_lang)
-            # source_1 / source_2 might remain in English or be translated. 
-            # Prompt says "Output format: classification, severity, explanation, source_sentence_original".
-            # ReportRow doesn't strictly have "source_sentence_original" field yet, it relies on `source_sentence_refs`.
-            # To be safe, we translate visible parts.
-            translated_rows.append(row)
-        
-        report.rows = translated_rows
-        report.disclaimer = await translate_text(report.disclaimer, detected_lang)
+    report.analysis_language = detected_lang
 
     return report
 

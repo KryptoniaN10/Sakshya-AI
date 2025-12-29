@@ -27,7 +27,17 @@ async def extract_events_from_text(text: str, statement_type: str) -> list[Event
         )
         print(f"DEBUG: LLM Raw Response: {response.text}")
         
-        result_json = json.loads(response.text)
+        # Clean the response - sometimes LLM adds markdown or extra text
+        response_text = response.text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]  # Remove ```json
+        if response_text.startswith("```"):
+            response_text = response_text[3:]  # Remove ```
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]  # Remove trailing ```
+        response_text = response_text.strip()
+        
+        result_json = json.loads(response_text)
         events_data = result_json.get("events", [])
         print(f"DEBUG: Parsed {len(events_data)} events.")
         
@@ -46,6 +56,12 @@ async def extract_events_from_text(text: str, statement_type: str) -> list[Event
             
         return events
 
+    except json.JSONDecodeError as je:
+        print(f"JSON Decode Error during LLM extraction: {je}")
+        print(f"Response was: {response.text if 'response' in locals() else 'No response'}")
+        return []
     except Exception as e:
         print(f"Error during LLM extraction: {e}")
+        import traceback
+        traceback.print_exc()
         return []

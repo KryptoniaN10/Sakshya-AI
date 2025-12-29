@@ -54,9 +54,19 @@ async def compare_events(event1: Event, event2: Event) -> ComparisonResult:
             prompt,
             generation_config={"response_mime_type": "application/json"}
         )
-        # print(f"DEBUG: Comparison LLM Response: {response.text}")
+        print(f"DEBUG: Comparison LLM Response: {response.text}")
         
-        result_json = json.loads(response.text)
+        # Clean response
+        response_text = response.text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        result_json = json.loads(response_text)
         
         result = ComparisonResult(
             event_1_id=event1.event_id,
@@ -69,8 +79,18 @@ async def compare_events(event1: Event, event2: Event) -> ComparisonResult:
         comparison_cache[cache_key] = result
         return result
 
+    except json.JSONDecodeError as je:
+        print(f"JSON Decode Error during comparison: {je}")
+        return ComparisonResult(
+            event_1_id=event1.event_id,
+            event_2_id=event2.event_id,
+            classification="consistent",
+            explanation="JSON parsing error; treating as consistent for stability."
+        )
     except Exception as e:
         print(f"Error during LLM comparison: {e}")
+        import traceback
+        traceback.print_exc()
         # --- OBJECTIVE 5: SAFETY FALLBACK ---
         # Use a valid classification literal as defined in schemas.py to avoid
         # Pydantic validation errors when constructing the response.

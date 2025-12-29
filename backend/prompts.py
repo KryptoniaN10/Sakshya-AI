@@ -3,6 +3,10 @@ EXTRACTION_PROMPT = """
 You are a legal analysis assistant trained to extract FACTUAL EVENTS
 from criminal witness statements.
 
+INSTRUCTION: The input text may be in any language. Always RESPOND IN THE SAME LANGUAGE
+as the input. Do NOT translate the input or the output. Produce extracted fields and the
+`source_sentence` in the original language of the text.
+
 This task is purely extractive.
 You must NOT infer, assume, or add facts.
 
@@ -68,6 +72,10 @@ DO NOT:
 
 COMPARISON_PROMPT = """
 You are a legal reasoning assistant assisting in cross-examination preparation.
+
+INSTRUCTION: The events and prompts may be in any language. Always RESPOND IN THE SAME
+LANGUAGE AS THE INPUT. Do NOT translate the input or the output. The `explanation` field
+must be returned in the original language of the events.
 
 You are comparing TWO extracted events attributed to the SAME WITNESS,
 recorded at DIFFERENT procedural stages.

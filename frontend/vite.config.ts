@@ -7,12 +7,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/analyze': {
-        target: 'http://127.0.0.1:8009',
+        target: 'http://127.0.0.1:8005',
         changeOrigin: true,
         secure: false
       },
       '/upload-document': {
-        target: 'http://127.0.0.1:8009',
+        target: 'http://127.0.0.1:8005',
         changeOrigin: true,
         secure: false
       },
