@@ -3,7 +3,10 @@ import type { AnalysisReport } from './types';
 import ConfrontationTable from './components/ConfrontationTable';
 import './index.css';
 import Login from './components/Login';
+import HistoryViewer from './components/HistoryViewer';
 import { useAuth } from './contexts/AuthContext';
+import { db } from './firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -13,6 +16,10 @@ function App() {
   const [s2Type, setS2Type] = useState("Section 161");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<AnalysisReport | null>(null);
+
+  // UI State
+  const [showLogin, setShowLogin] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -46,18 +53,54 @@ function App() {
 
       const data = await response.json();
       console.log('upload response', data);
-      // Ensure content_preview is a string and set it safely
       const preview = typeof data.content_preview === 'string' ? data.content_preview : String(data.content_preview || '');
       setText(preview);
-      // Show short preview alert for immediate feedback
       alert(`Extracted text from ${data.filename}. Preview: ${preview.slice(0, 200)}\n\nPlease review and edit if necessary.`);
     } catch (err) {
       console.error(err);
       alert("Failed to upload/extract text: " + (err as Error).message);
     } finally {
       setLoading(false);
-      // Reset file input
       e.target.value = '';
+    }
+  };
+
+  const saveHistory = async (reportData: AnalysisReport) => {
+    if (!user) return;
+
+    try {
+      // Calculate summary stats
+      const summary = {
+        critical: reportData.rows.filter(r => r.severity === 'Critical').length,
+        material: reportData.rows.filter(r => r.severity === 'Material').length,
+        minor: reportData.rows.filter(r => r.severity === 'Minor').length,
+        omission: reportData.rows.filter(r => r.classification === 'omission').length
+      };
+
+      // Extract unique actors from the rows (parsing "Type: Actor Action")
+      const actorsSet = new Set<string>();
+      reportData.rows.forEach(row => {
+        // Try to extract actor name if it follows the pattern "EventType: Actor Action..."
+        // We look for the first word or two after the colon
+        // This is a heuristic.
+        const match = row.source_1.match(/:\s*([^ ]+)/);
+        if (match && match[1]) actorsSet.add(match[1]);
+      });
+      const actors = Array.from(actorsSet).slice(0, 3);
+
+      await addDoc(collection(db, 'analysis_history'), {
+        userId: user.uid,
+        caseId: `CASE-${Date.now()}`, // Simple ID generation
+        title: `Analysis: ${s1Type} vs ${s2Type}`,
+        previewText: s1Text.slice(0, 150) + (s1Text.length > 150 ? "..." : ""),
+        actors: actors,
+        createdAt: serverTimestamp(),
+        detectedLanguage: reportData.input_language,
+        summary
+      });
+      console.log("Analysis history saved.");
+    } catch (err) {
+      console.error("Failed to save history:", err);
     }
   };
 
@@ -83,6 +126,12 @@ function App() {
       const data = await response.json();
       console.log("DEBUG: Received Analysis Report:", data);
       setReport(data);
+
+      // Save history if logged in
+      if (user) {
+        saveHistory(data);
+      }
+
     } catch (error) {
       console.error("Fetch error details:", error);
       alert(`Error analyzing statements: ${(error as Error).message}. Check console for details.`);
@@ -92,7 +141,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-blue-500/30">
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-blue-500/30 relative">
 
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
@@ -104,37 +153,67 @@ function App() {
           <div className="flex items-center gap-4">
             <nav className="text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer">Docs</nav>
             {authLoading ? (
-              <div className="text-sm text-slate-400">Checking auth...</div>
+              <div className="text-sm text-slate-400">Loading...</div>
             ) : user ? (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-300">{user.email}</span>
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="text-sm text-slate-300 hover:text-white bg-slate-800/50 px-3 py-1 rounded border border-slate-700/50 hover:border-slate-600 transition-all"
+                >
+                  My Analyses
+                </button>
+                <div className="h-4 w-px bg-slate-700"></div>
                 <button onClick={() => logout()} className="text-sm text-blue-400 hover:text-blue-300">Sign out</button>
               </div>
             ) : (
-              <div className="text-sm text-slate-400">Not signed in</div>
+              <button
+                onClick={() => setShowLogin(true)}
+                className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded transition-colors"
+              >
+                Log In
+              </button>
             )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-12">
-        {/* If user not signed in, show login */}
-        {!user && !authLoading && (
-          <div className="mb-12">
-            <Login />
+      {/* Login Modal */}
+      {showLogin && !user && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 p-1 rounded-lg w-full max-w-md shadow-2xl relative">
+            <button
+              onClick={() => setShowLogin(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-white z-10"
+            >
+              ✕
+            </button>
+            <Login onGuest={() => setShowLogin(false)} />
           </div>
-        )}
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistory && user && (
+        <HistoryViewer onClose={() => setShowHistory(false)} onLoadReport={() => { }} />
+      )}
+
+      <main className="mx-auto max-w-7xl px-6 py-12">
 
         {/* Intro */}
-        {user && !report && !loading && (
+        {!report && !loading && (
           <div className="mb-12 text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold text-white mb-4">Witness Statement Analysis</h2>
-            <p className="text-slate-400">Upload or paste statements below to identify semantic contradictions, omissions, and legal discrepancies automatically.</p>
+            <p className="text-slate-400 mb-6">Upload or paste statements below to identify semantic contradictions, omissions, and legal discrepancies automatically.</p>
+            {!user && (
+              <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-3 text-sm text-blue-300 inline-block">
+                💡 <span className="font-semibold">Guest Mode:</span> You can use all features freely. <button onClick={() => setShowLogin(true)} className="underline hover:text-white">Log in</button> to save your history.
+              </div>
+            )}
           </div>
         )}
 
-        {/* Input Section */}
-        {user && !report && !loading && (
+        {/* Input Section - ALWAYS VISIBLE (Guest Mode Support) */}
+        {!report && !loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div className="space-y-4">
               <div className="flex justify-between items-center bg-slate-800 p-2 rounded">
@@ -236,6 +315,11 @@ function App() {
                 {report.input_language !== 'en' && (
                   <span className="text-xs text-yellow-400 mt-1">
                     Detected Language: {report.input_language.toUpperCase()} — Analysis performed via English translation for legal accuracy.
+                  </span>
+                )}
+                {!user && (
+                  <span className="text-xs text-slate-500 mt-1">
+                    Log in to save this analysis to your history.
                   </span>
                 )}
               </div>

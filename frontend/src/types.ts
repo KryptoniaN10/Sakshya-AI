@@ -21,3 +21,20 @@ export interface AnalyzeRequest {
     statement_2_text: string;
     statement_2_type: string;
 }
+
+export interface AnalysisHistoryItem {
+    id: string;
+    userId: string;
+    caseId: string;
+    title: string;
+    createdAt: any; // Timestamp
+    detectedLanguage: string;
+    actors?: string[];
+    previewText?: string;
+    summary: {
+        critical: number;
+        material: number;
+        minor: number;
+        omission: number;
+    };
+}
