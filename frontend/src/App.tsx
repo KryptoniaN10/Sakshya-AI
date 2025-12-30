@@ -2,8 +2,11 @@ import { useState } from 'react';
 import type { AnalysisReport } from './types';
 import ConfrontationTable from './components/ConfrontationTable';
 import './index.css';
+import Login from './components/Login';
+import { useAuth } from './contexts/AuthContext';
 
 function App() {
+  const { user, logout, loading: authLoading } = useAuth();
   const [s1Text, setS1Text] = useState("");
   const [s1Type, setS1Type] = useState("FIR");
   const [s2Text, setS2Text] = useState("");
@@ -97,16 +100,32 @@ function App() {
             <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-lg shadow-blue-500/20"></div>
             <h1 className="text-xl font-bold tracking-tight text-white">Sakshya AI <span className="text-xs font-normal text-slate-400 bg-slate-800 px-2 py-0.5 rounded ml-2">MVP</span></h1>
           </div>
-          <nav className="text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer">
-            Docs
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer">Docs</nav>
+            {authLoading ? (
+              <div className="text-sm text-slate-400">Checking auth...</div>
+            ) : user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-300">{user.email}</span>
+                <button onClick={() => logout()} className="text-sm text-blue-400 hover:text-blue-300">Sign out</button>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-400">Not signed in</div>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-12">
+        {/* If user not signed in, show login */}
+        {!user && !authLoading && (
+          <div className="mb-12">
+            <Login />
+          </div>
+        )}
 
         {/* Intro */}
-        {!report && !loading && (
+        {user && !report && !loading && (
           <div className="mb-12 text-center max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold text-white mb-4">Witness Statement Analysis</h2>
             <p className="text-slate-400">Upload or paste statements below to identify semantic contradictions, omissions, and legal discrepancies automatically.</p>
@@ -114,7 +133,7 @@ function App() {
         )}
 
         {/* Input Section */}
-        {!report && !loading && (
+        {user && !report && !loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div className="space-y-4">
               <div className="flex justify-between items-center bg-slate-800 p-2 rounded">
