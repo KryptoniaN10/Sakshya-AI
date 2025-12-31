@@ -48,7 +48,7 @@ The system identifies **semantic contradictions** and **material omissions** bet
 | **Backend** | Python 3.10+, FastAPI, Uvicorn |
 | **Frontend** | React 19.2, TypeScript, Vite, TailwindCSS |
 | **Auth & DB** | Firebase Authentication, Cloud Firestore |
-| **AI Engine** | Google Gemini 2.5 Flash (`gemini-2.5-flash-lite`) |
+| **AI Engine** | Google Gemini 2.5 Flash (`gemini-2.5-flash`) |
 | **Language Detection** | langdetect |
 | **OCR** | Remote PaddleOCR API, pdfplumber, OpenCV |
 
@@ -101,7 +101,7 @@ Then edit `backend/.env` with your actual API keys:
 
 ```env
 GEMINI_API_KEY=your_actual_gemini_api_key_here
-GEMINI_MODEL_NAME=gemini-2.5-flash-lite
+GEMINI_MODEL_NAME=gemini-2.5-flash
 PADDLE_OCR_URL=https://your-paddle-ocr-endpoint.com  # Optional
 ```
 
@@ -192,6 +192,25 @@ cp backend/.env.example backend/.env
 2. Click "Get API Key" or "Create API Key"
 3. Create a new API key (free tier available)
 4. Copy the key and paste into `backend/.env` as `GEMINI_API_KEY`
+
+### Firebase Configuration (Frontend)
+
+To enable Authentication and History, you need a Firebase project:
+
+1.  Go to [Firebase Console](https://console.firebase.google.com/) and create a project.
+2.  Enable **Authentication** (Email/Password).
+3.  Enable **Cloud Firestore** (Create Database).
+4.  Go to Project Settings -> General -> "Your apps" -> Add Web App.
+5.  Copy the config values and add them to `frontend/.env`:
+
+```env
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+```
 
 **Note**: Free tier has rate limits. For production, upgrade to a paid tier.
 
@@ -388,7 +407,7 @@ Lawyers and judges must independently verify all findings against original case 
 
 For issues, feature requests, or feedback:
 - Open an issue on GitHub
-- Contact: [your-email@example.com]
+- Contact: [devadathanappu69@gmail.com]
 
 ## 🔄 Recent Updates (v1.1)
 
@@ -399,7 +418,7 @@ For issues, feature requests, or feedback:
 - ✅ **Malayalam & all Indian language support** with same-language output
 - ✅ Improved extraction and comparison prompts with language preservation
 - ✅ Enhanced error handling and JSON response parsing
-- ✅ Updated to Google Gemini 2.5 Flash (Lite) model
+- ✅ Updated to Google Gemini 2.5 Flash model
 - ✅ Better `.env` configuration handling with `.env.example` template
 - ✅ Comprehensive `.gitignore` for Python/Node.js projects
 

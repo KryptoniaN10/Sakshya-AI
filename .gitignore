@@ -91,3 +91,8 @@ test_*.json
 debug_test.py
 test_malayalam.py
 local_pipeline_test.py
+reproduce_issue.py
+MALAYALAM_FIX_SUMMARY.md
+backend/list_models_temp.py
+backend/backend_debug.txt
+backend/resp.json
