@@ -32,8 +32,16 @@ def _remote_paddle_ocr(img: Image.Image, url: str, timeout: int = 30) -> Tuple[s
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         buf.seek(0)
-        files = {"file": ("image.png", buf, "image/png")}
-        resp = requests.post(url, files=files, timeout=timeout)
+        # files = {"file": ("image.png", buf, "image/png")}
+        # resp = requests.post(url, files=files, timeout=timeout)
+        
+        # FIX: Send as raw binary (octet-stream) to match the curl command provided
+        headers = {
+            "Content-Type": "application/octet-stream", 
+            "Accept": "application/json"
+        }
+        resp = requests.post(url, data=buf.getvalue(), headers=headers, timeout=timeout)
+        
         resp_info = {"status_code": resp.status_code}
         # try to parse JSON body, otherwise return text
         try:
