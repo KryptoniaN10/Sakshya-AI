@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { AnalysisReport } from './types';
 import ConfrontationTable from './components/ConfrontationTable';
 import './index.css';
@@ -18,6 +18,12 @@ function App() {
   const [s2Type, setS2Type] = useState("Section 161");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<AnalysisReport | null>(null);
+
+  // Audio recording state
+  const [recordingTarget, setRecordingTarget] = useState<'s1' | 's2' | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [transcribingTarget, setTranscribingTarget] = useState<'s1' | 's2' | null>(null);
 
   // UI State
   const [showLogin, setShowLogin] = useState(false);
@@ -64,6 +70,99 @@ function App() {
     } finally {
       setLoading(false);
       e.target.value = '';
+    }
+  };
+
+  const callSpeechToText = async (
+    audioBlob: Blob,
+    setText: (t: string) => void,
+    statementType: string
+  ) => {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('statement_type', statementType);
+
+    try {
+      const response = await fetch(`${API_BASE}/speech-to-text`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const maybeJson = await response.text();
+        throw new Error(`STT failed: ${maybeJson}`);
+      }
+
+      const data = await response.json();
+      const text = typeof data.text === 'string' ? data.text : String(data.text || '');
+      setText(prev => (prev ? prev + '\n' + text : text));
+    } catch (err) {
+      console.error('Speech-to-text error', err);
+      alert('Failed to transcribe audio: ' + (err as Error).message);
+    }
+  };
+
+  const handleAudioUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setText: (t: string) => void,
+    statementType: string,
+    target: 's1' | 's2',
+  ) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+
+    setTranscribingTarget(target);
+    try {
+      await callSpeechToText(file, setText, statementType);
+    } finally {
+      setTranscribingTarget(null);
+      e.target.value = '';
+    }
+  };
+
+  const startRecording = async (target: 's1' | 's2') => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Audio recording is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const targetSetter = target === 's1' ? setS1Text : setS2Text;
+
+        setTranscribingTarget(target);
+        try {
+          await callSpeechToText(audioBlob, targetSetter, target === 's1' ? s1Type : s2Type);
+        } finally {
+          setTranscribingTarget(null);
+        }
+        setRecordingTarget(null);
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setRecordingTarget(target);
+    } catch (err) {
+      console.error('Error starting recording', err);
+      alert('Could not access microphone: ' + (err as Error).message);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
   };
 
@@ -231,6 +330,32 @@ function App() {
                   <label htmlFor="file-upload-1" className="cursor-pointer text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-blue-300">
                     📄 Upload PDF/Img
                   </label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleAudioUpload(e, setS1Text, s1Type, 's1')}
+                    className="hidden"
+                    id="audio-upload-1"
+                  />
+                  <label
+                    htmlFor="audio-upload-1"
+                    className="cursor-pointer text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-blue-300"
+                  >
+                    🎵 Upload Audio
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordingTarget === 's1' ? stopRecording() : startRecording('s1')
+                    }
+                    className={`text-xs px-2 py-1 rounded border ${
+                      recordingTarget === 's1'
+                        ? 'bg-red-600 border-red-500 text-white'
+                        : 'bg-slate-700 border-slate-600 text-amber-300'
+                    }`}
+                  >
+                    {recordingTarget === 's1' ? '⏹ Stop' : '🎙 Record'}
+                  </button>
                   <select
                     value={s1Type}
                     onChange={(e) => setS1Type(e.target.value)}
@@ -265,6 +390,32 @@ function App() {
                   <label htmlFor="file-upload-2" className="cursor-pointer text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-blue-300">
                     📄 Upload PDF/Img
                   </label>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleAudioUpload(e, setS2Text, s2Type, 's2')}
+                    className="hidden"
+                    id="audio-upload-2"
+                  />
+                  <label
+                    htmlFor="audio-upload-2"
+                    className="cursor-pointer text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-blue-300"
+                  >
+                    🎵 Upload Audio
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordingTarget === 's2' ? stopRecording() : startRecording('s2')
+                    }
+                    className={`text-xs px-2 py-1 rounded border ${
+                      recordingTarget === 's2'
+                        ? 'bg-red-600 border-red-500 text-white'
+                        : 'bg-slate-700 border-slate-600 text-amber-300'
+                    }`}
+                  >
+                    {recordingTarget === 's2' ? '⏹ Stop' : '🎙 Record'}
+                  </button>
                   <select
                     value={s2Type}
                     onChange={(e) => setS2Type(e.target.value)}
@@ -349,6 +500,16 @@ function App() {
         )}
 
       </main>
+      {transcribingTarget && (
+        <div className="fixed inset-0 z-40 pointer-events-none flex items-end justify-center">
+          <div className="mb-10 flex items-center gap-3 rounded-full border border-blue-500/40 bg-slate-900/70 px-4 py-2 shadow-lg shadow-blue-950/40 backdrop-blur">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+            <span className="text-sm text-slate-100">
+              Transcribing audio for {transcribingTarget === 's1' ? 'Statement 1' : 'Statement 2'}...
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

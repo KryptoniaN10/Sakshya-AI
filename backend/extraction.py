@@ -40,20 +40,36 @@ async def extract_events_from_text(text: str, statement_type: str) -> list[Event
         result_json = json.loads(response_text)
         events_data = result_json.get("events", [])
         print(f"DEBUG: Parsed {len(events_data)} events.")
-        
-        events = []
+
+        events: list[Event] = []
         for e in events_data:
             events.append(Event(
-                event_id=f"{statement_type}_{len(events)+1}", # Simple ID generation
+                event_id=f"{statement_type}_{len(events)+1}",  # Simple ID generation
                 actor=e.get("actor", "Unknown"),
                 action=e.get("action", "Unknown"),
                 target=e.get("target"),
                 time=e.get("time"),
                 location=e.get("location"),
                 source_sentence=e.get("source_sentence", ""),
-                statement_type=statement_type # Force the type
+                statement_type=statement_type,  # Force the type
             ))
-            
+
+        # Fallback: if the LLM did not extract any events but the text
+        # is non-empty, create a single generic event covering the whole
+        # statement so that downstream comparison can still operate.
+        if not events and text and text.strip():
+            print("DEBUG: No events extracted; creating fallback event from full text.")
+            events.append(Event(
+                event_id=f"{statement_type}_1_fallback",
+                actor="Witness",
+                action=text.strip(),
+                target=None,
+                time=None,
+                location=None,
+                source_sentence=text.strip(),
+                statement_type=statement_type,
+            ))
+
         return events
 
     except json.JSONDecodeError as je:

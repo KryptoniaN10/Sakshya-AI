@@ -62,3 +62,26 @@ class AnalyzeRequest(BaseModel):
     statement_1_type: str
     statement_2_text: str
     statement_2_type: str
+
+
+class SpeechToTextResponse(BaseModel):
+    """Generic response for speech-to-text requests.
+
+    The exact fields returned by Sarvam may differ; this model captures
+    the core fields we care about on the frontend.
+    """
+
+    text: str = Field(..., description="Transcribed text from the audio input")
+    detected_language: Optional[str] = Field(
+        default=None,
+        description="Language code detected by the STT backend, if available.",
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Underlying STT model used for transcription.",
+    )
+    duration_seconds: Optional[float] = Field(
+        default=None,
+        description="Approximate duration of the processed audio clip.",
+    )
+

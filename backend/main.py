@@ -1,6 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import AnalyzeRequest, AnalysisReport, ReportRow, ExtractedEvents
+from fastapi import UploadFile, File, Form
+
+from schemas import (
+    AnalyzeRequest,
+    AnalysisReport,
+    ReportRow,
+    ExtractedEvents,
+    UploadResponse,
+    SpeechToTextResponse,
+)
 from ingestion import clean_text
 from extraction import extract_events_from_text
 from compare import compare_events
@@ -8,9 +17,10 @@ from heuristics import apply_legal_heuristics
 from report import generate_final_report
 from filters import should_compare_events, group_omissions, comparison_cache
 from translation import detect_language, translate_to_english, translate_text
-from fastapi import UploadFile, File, Form
-from schemas import UploadResponse
 from ocr import extract_text_from_file
+from config import SARVAM_API_KEY, SARVAM_STT_URL, SARVAM_STT_MODEL
+
+import requests
 
 app = FastAPI(title="Sakshya AI", description="AI-assisted legal decision support.")
 
@@ -26,6 +36,89 @@ app.add_middleware(
 @app.get("/")
 def health_check():
     return {"status": "ok", "message": "Sakshya AI Backend Running"}
+
+
+@app.post("/speech-to-text", response_model=SpeechToTextResponse)
+async def speech_to_text(
+    file: UploadFile = File(...),
+    statement_type: str = Form("generic"),  # kept for future routing/analytics
+):
+    """Transcribe an uploaded audio file using the Sarvam STT API.
+
+    The exact Sarvam API contract (endpoint, fields) is configured via
+    environment variables in backend/.env and loaded in config.py.
+    """
+
+    if not SARVAM_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Sarvam STT is not configured (missing SARVAM_API_KEY)",
+        )
+
+    try:
+        audio_bytes = await file.read()
+
+        # Match Sarvam curl example:
+        # curl -X POST https://api.sarvam.ai/speech-to-text \
+        #   -H "api-subscription-key: <apiKey>" \
+        #   -H "Content-Type: multipart/form-data" \
+        #   -F file=@<path>
+        headers = {
+            "api-subscription-key": SARVAM_API_KEY,
+        }
+
+        files = {
+            "file": (
+                file.filename or "audio.wav",
+                audio_bytes,
+                file.content_type or "audio/mpeg",
+            )
+        }
+
+        # Basic STT call as per docs – no extra form fields required.
+        resp = requests.post(SARVAM_STT_URL, headers=headers, files=files, timeout=60)
+
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+            except Exception:
+                err_body = resp.text
+            raise HTTPException(
+                status_code=502,
+                detail=f"Sarvam STT request failed with status {resp.status_code}: {err_body}",
+            )
+
+        try:
+            payload = resp.json()
+        except Exception as e:  # pragma: no cover - defensive
+            raise HTTPException(status_code=502, detail=f"Invalid JSON from Sarvam STT: {e}")
+
+        # Try common field names for the transcribed text.
+        text = (
+            payload.get("text")
+            or payload.get("transcript")
+            or payload.get("transcription")
+            or payload.get("output_text")
+        )
+
+        if not text:
+            raise HTTPException(
+                status_code=502,
+                detail="Sarvam STT response did not contain a transcription field.",
+            )
+
+        return SpeechToTextResponse(
+            text=text,
+            detected_language=payload.get("language") or payload.get("detected_language"),
+            model=payload.get("model") or SARVAM_STT_MODEL,
+            duration_seconds=payload.get("duration") or payload.get("duration_seconds"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Speech-to-text error: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal STT error: {e}")
 
 @app.post("/upload-document", response_model=UploadResponse)
 async def upload_document(
